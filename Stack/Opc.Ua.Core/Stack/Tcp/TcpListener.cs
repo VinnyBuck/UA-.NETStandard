@@ -187,13 +187,13 @@ namespace Opc.Ua.Bindings
                 {
                     IPEndPoint endpoint = new IPEndPoint(IPAddress.Any, port);
                     m_listeningSocket = new Socket(endpoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-                    m_listeningSocket.LingerState = new LingerOption(true, 0);
                     SocketAsyncEventArgs args = new SocketAsyncEventArgs();
                     args.Completed += OnAccept;
                     args.UserToken = m_listeningSocket;
                     m_listeningSocket.Bind(endpoint);
                     m_listeningSocket.Listen(Int32.MaxValue);
                     m_listeningSocket.AcceptAsync(args);
+                    m_listeningSocket.LingerState = new LingerOption(true, 0);
                 }
                 catch (Exception ex)
                 {
@@ -207,13 +207,13 @@ namespace Opc.Ua.Bindings
                 {
                     IPEndPoint endpointIPv6 = new IPEndPoint(IPAddress.IPv6Any, port);
                     m_listeningSocketIPv6 = new Socket(endpointIPv6.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-                    m_listeningSocketIPv6.LingerState = new LingerOption(true, 0);
                     SocketAsyncEventArgs args = new SocketAsyncEventArgs();
                     args.Completed += OnAccept;
                     args.UserToken = m_listeningSocketIPv6;
                     m_listeningSocketIPv6.Bind(endpointIPv6);
                     m_listeningSocketIPv6.Listen(Int32.MaxValue);
                     m_listeningSocketIPv6.AcceptAsync(args);
+                    m_listeningSocketIPv6.LingerState = new LingerOption(true, 0);
                 }
                 catch (Exception ex)
                 {
