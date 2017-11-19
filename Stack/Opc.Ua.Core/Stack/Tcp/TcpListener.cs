@@ -187,6 +187,7 @@ namespace Opc.Ua.Bindings
                 {
                     IPEndPoint endpoint = new IPEndPoint(IPAddress.Any, port);
                     m_listeningSocket = new Socket(endpoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+                    m_listeningSocket.LingerState = new LingerOption(false, 0);
                     SocketAsyncEventArgs args = new SocketAsyncEventArgs();
                     args.Completed += OnAccept;
                     args.UserToken = m_listeningSocket;
@@ -206,6 +207,7 @@ namespace Opc.Ua.Bindings
                 {
                     IPEndPoint endpointIPv6 = new IPEndPoint(IPAddress.IPv6Any, port);
                     m_listeningSocketIPv6 = new Socket(endpointIPv6.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+                    m_listeningSocketIPv6.LingerState = new LingerOption(false, 0);
                     SocketAsyncEventArgs args = new SocketAsyncEventArgs();
                     args.Completed += OnAccept;
                     args.UserToken = m_listeningSocketIPv6;
@@ -238,12 +240,18 @@ namespace Opc.Ua.Bindings
             {
                 if (m_listeningSocket != null)
                 {
+#if !NETSTANDARD1_4 && !NETSTANDARD1_3
+                    m_listeningSocket.Close(0);
+#endif
                     m_listeningSocket.Dispose();
                     m_listeningSocket = null;
                 }
 
                 if (m_listeningSocketIPv6 != null)
                 {
+#if !NETSTANDARD1_4 && !NETSTANDARD1_3
+                    m_listeningSocketIPv6.Close(0);
+#endif
                     m_listeningSocketIPv6.Dispose();
                     m_listeningSocketIPv6 = null;
                 }
