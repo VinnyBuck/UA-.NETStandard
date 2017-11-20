@@ -12,10 +12,9 @@
 
 using System;
 using System.Collections.Generic;
-using System.Threading;
-using System.Security.Cryptography.X509Certificates;
-using System.Net.Sockets;
 using System.Net;
+using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 
 namespace Opc.Ua.Bindings
 {
@@ -78,12 +77,6 @@ namespace Opc.Ua.Bindings
                         }
 
                         m_listeningSocketIPv6 = null;
-                    }
-
-                    if (m_simulator != null)
-                    {
-                        Utils.SilentDispose(m_simulator);
-                        m_simulator = null;
                     }
 
                     foreach (TcpServerChannel channel in m_channels.Values)
@@ -182,6 +175,8 @@ namespace Opc.Ua.Bindings
                     port = Utils.UaTcpDefaultPort;
                 }
 
+                m_listeningStopped = false;
+
                 // create IPv4 socket.
                 try
                 {
@@ -193,7 +188,7 @@ namespace Opc.Ua.Bindings
                     m_listeningSocket.Bind(endpoint);
                     m_listeningSocket.Listen(Int32.MaxValue);
                     m_listeningSocket.AcceptAsync(args);
-                    m_listeningSocket.LingerState = new LingerOption(true, 0);
+                    m_listeningSocket.LingerState = new LingerOption(false, 0);
                 }
                 catch (Exception ex)
                 {
@@ -213,7 +208,7 @@ namespace Opc.Ua.Bindings
                     m_listeningSocketIPv6.Bind(endpointIPv6);
                     m_listeningSocketIPv6.Listen(Int32.MaxValue);
                     m_listeningSocketIPv6.AcceptAsync(args);
-                    m_listeningSocketIPv6.LingerState = new LingerOption(true, 0);
+                    m_listeningSocketIPv6.LingerState = new LingerOption(false, 0);
                 }
                 catch (Exception ex)
                 {
@@ -236,25 +231,44 @@ namespace Opc.Ua.Bindings
         /// </summary>
         public void Stop()
         {
+            Socket listeningSocket = null;
+            Socket listeningSocketIPv6 = null;
             lock (m_lock)
             {
+                m_listeningStopped = true;
                 if (m_listeningSocket != null)
                 {
-#if !NETSTANDARD1_4 && !NETSTANDARD1_3
-                    m_listeningSocket.Close(0);
-#endif
-                    m_listeningSocket.Dispose();
+                    listeningSocket = m_listeningSocket;
                     m_listeningSocket = null;
                 }
 
                 if (m_listeningSocketIPv6 != null)
                 {
-#if !NETSTANDARD1_4 && !NETSTANDARD1_3
-                    m_listeningSocketIPv6.Close(0);
-#endif
-                    m_listeningSocketIPv6.Dispose();
+                    listeningSocketIPv6 = m_listeningSocketIPv6;
                     m_listeningSocketIPv6 = null;
                 }
+
+                foreach (TcpServerChannel channel in m_channels.Values)
+                {
+                    Utils.SilentDispose(channel);
+                }
+            }
+
+            if (listeningSocket != null)
+            {
+                //listeningSocket.Shutdown(SocketShutdown.Receive);
+#if !NETSTANDARD1_4 && !NETSTANDARD1_3
+                listeningSocket.Close(0);
+#endif
+                Utils.SilentDispose(listeningSocket);
+            }
+            if (listeningSocketIPv6 != null)
+            {
+                //listeningSocketIPv6.Shutdown(SocketShutdown.Receive);
+#if !NETSTANDARD1_4 && !NETSTANDARD1_3
+                listeningSocketIPv6.Close(0);
+#endif
+                Utils.SilentDispose(listeningSocketIPv6);
             }
         }
 
@@ -297,6 +311,15 @@ namespace Opc.Ua.Bindings
 
             Utils.Trace("Channel {0} closed", channelId);
         }
+
+        internal void UpdateServerCertificates(
+            X509Certificate2 serverCertificate,
+            X509Certificate2Collection serverCertificateChain
+            )
+        {
+            m_serverCertificate = serverCertificate;
+            m_serverCertificateChain = serverCertificateChain;
+        }
         #endregion
 
         #region Socket Event Handler
@@ -307,17 +330,22 @@ namespace Opc.Ua.Bindings
         {
             TcpServerChannel channel = null;
 
+            Socket listeningSocket = e.UserToken as Socket;
+
+            if (listeningSocket == null || m_listeningStopped)
+            {
+                if (e.AcceptSocket != null && e.SocketError == SocketError.Success)
+                {
+                    e.AcceptSocket.Shutdown(SocketShutdown.Both);
+                    e.AcceptSocket.Dispose();
+                }
+                Utils.Trace("OnAccept: Listensocket was null or stopped.");
+                e.Dispose();
+                return;
+            }
+
             lock (m_lock)
             {
-                Socket listeningSocket = e.UserToken as Socket;
-
-                if (listeningSocket == null)
-                {
-                    Utils.Trace("OnAccept: Listensocket was null.");
-                    e.Dispose();
-                    return;
-                }
-
                 // check if the accept socket has been created.
                 if (e.AcceptSocket != null && e.SocketError == SocketError.Success)
                 {
@@ -428,12 +456,10 @@ namespace Opc.Ua.Bindings
         private X509Certificate2Collection m_serverCertificateChain;
 
         private uint m_lastChannelId;
-
         private Socket m_listeningSocket;
         private Socket m_listeningSocketIPv6;
+        private bool m_listeningStopped;
         private Dictionary<uint, TcpServerChannel> m_channels;
-
-        private Timer m_simulator;
         private ITransportListenerCallback m_callback;
         #endregion
     }
